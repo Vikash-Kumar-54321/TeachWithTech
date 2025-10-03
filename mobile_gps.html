@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Send GPS</title>
+</head>
+<body>
+    <h2>Send GPS Coordinates</h2>
+    <button onclick="sendLocation()">Send My Location</button>
+
+    <script>
+        async function sendLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    console.log(lat, lon);
+
+                    await fetch('http://192.168.0.101:5000/update_location', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({lat: lat, lon: lon})
+                    });
+                    alert("Location sent!");
+                }, (err) => alert("Error fetching location: " + err.message), {
+                    enableHighAccuracy: true
+                });
+            } else {
+                alert("Geolocation not supported");
+            }
+        }
+    </script>
+</body>
+</html>

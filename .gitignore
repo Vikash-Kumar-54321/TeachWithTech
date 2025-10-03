@@ -1,0 +1,28 @@
+# Node modules
+node_modules/
+
+# Python virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build and log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Lock files (optional, keep if needed for dependency management)
+package-lock.json

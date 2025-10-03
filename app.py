@@ -1,0 +1,463 @@
+from flask import Flask, request, jsonify, Response
+import face_recognition
+import cv2
+import numpy as np
+from geopy.distance import geodesic
+import requests
+from flask_cors import CORS
+import time
+import os
+from datetime import datetime
+import json
+from pymongo import MongoClient
+
+app = Flask(__name__)
+CORS(app)
+
+# ---------- Config ----------
+SCHOOL_LOCATION = (23.767895, 92.741655)
+MIN_DISTANCE_METERS = 500
+MAX_FACE_DISTANCE = 0.6
+
+# Global variables
+CURRENT_TEACHER_EMAIL = None
+KNOWN_FACE_ENCODING = None
+user_location = None
+video_capture = None
+attendance_done = False
+verification_start_time = None
+
+# MongoDB connection
+# MongoDB connection - FIXED VERSION
+try:
+    client = MongoClient('mongodb+srv://vedant:vedant@cluster0.kdram3w.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+    # Test the connection
+    client.admin.command('ping')
+    db = client['test']  # Use explicit database name with brackets
+    teachers_collection = db['teachers']  # Use explicit collection name with brackets
+    print("✅ Connected to MongoDB successfully")
+    print(f"📊 Database: {db.name}, Collection: {teachers_collection.name}")
+except Exception as e:
+    print(f"❌ MongoDB connection error: {e}")
+    client = None
+    db = None
+    teachers_collection = None
+
+# ---------- Helper Functions ----------
+def load_teacher_face(image_url):
+    try:
+        print(f"📸 Loading face from URL: {image_url}")
+        response = requests.get(image_url, stream=True, timeout=10)
+        if response.status_code == 200:
+            image_array = np.asarray(bytearray(response.content), dtype=np.uint8)
+            image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+            
+            if image is None:
+                print("❌ Failed to decode image")
+                return None
+                
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            encodings = face_recognition.face_encodings(rgb_image)
+            
+            if len(encodings) > 0:
+                print("✅ Face encoding loaded successfully")
+                return encodings[0]
+            else:
+                print("❌ No faces found in the image")
+                return None
+        else:
+            print(f"❌ Failed to download image. Status: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"❌ Error loading face: {str(e)}")
+        return None
+
+def mark_attendance_direct_in_db(email, face_matched, location_matched):
+    """Direct database access to mark attendance - FIXED VERSION"""
+    try:
+        # Properly check if collection is available
+        if teachers_collection is None:
+            print("❌ Database connection not available")
+            return False, "db_connection_error"
+
+        current_time = datetime.now()
+        date_str = current_time.strftime("%Y-%m-%d")
+        time_str = current_time.strftime("%H:%M:%S")
+        verified = face_matched and location_matched
+        
+        print(f"💾 Attempting to save attendance to DB for {email}")
+        print(f"📅 Date: {date_str}, Time: {time_str}")
+        print(f"🔍 Face Matched: {face_matched}, Location Matched: {location_matched}")
+
+        # Find the teacher first
+        teacher = teachers_collection.find_one({"email": email})
+        if not teacher:
+            print(f"❌ Teacher not found in database: {email}")
+            return False, "teacher_not_found"
+
+        print(f"✅ Found teacher: {teacher.get('name', 'Unknown')}")
+
+        # Check if attendance already exists for today
+        existing_record_index = -1
+        if 'attendance' in teacher and teacher['attendance']:
+            for i, record in enumerate(teacher['attendance']):
+                if record.get('date') == date_str:
+                    existing_record_index = i
+                    break
+
+        attendance_record = {
+            "date": date_str,
+            "time": time_str,
+            "faceMatched": face_matched,
+            "locationMatched": location_matched,
+            "verified": verified
+        }
+
+        if existing_record_index != -1:
+            # Update existing record
+            result = teachers_collection.update_one(
+                {"email": email},
+                {"$set": {
+                    f"attendance.{existing_record_index}.time": time_str,
+                    f"attendance.{existing_record_index}.faceMatched": face_matched,
+                    f"attendance.{existing_record_index}.locationMatched": location_matched,
+                    f"attendance.{existing_record_index}.verified": verified
+                }}
+            )
+            action = "updated"
+        else:
+            # Add new record - using $push to add to array
+            result = teachers_collection.update_one(
+                {"email": email},
+                {"$push": {"attendance": attendance_record}}
+            )
+            action = "created"
+
+        print(f"📊 MongoDB result - matched: {result.matched_count}, modified: {result.modified_count}")
+
+        if result.modified_count > 0 or (result.matched_count > 0 and action == "updated"):
+            print(f"✅ Attendance {action} successfully in database!")
+            
+            # Verify the save by reading back
+            updated_teacher = teachers_collection.find_one({"email": email})
+            if updated_teacher and 'attendance' in updated_teacher:
+                today_attendance = next((record for record in updated_teacher['attendance'] if record.get('date') == date_str), None)
+                if today_attendance:
+                    print(f"✅ Verification: Attendance confirmed in database - {today_attendance}")
+                else:
+                    print("⚠️ Attendance saved but not found in verification")
+            
+            return True, action
+        else:
+            print("❌ No changes made to database")
+            return False, "no_changes"
+
+    except Exception as e:
+        print(f"❌ Error in direct database access: {str(e)}")
+        import traceback
+        print(f"🔍 Full traceback: {traceback.format_exc()}")
+        return False, f"error: {str(e)}"
+    
+def send_attendance_to_backend(email, face_matched, location_matched):
+    """Primary function to save attendance - uses direct DB access"""
+    print("🎯 Using direct database method for attendance storage")
+    return mark_attendance_direct_in_db(email, face_matched, location_matched)
+
+@app.route("/debug/db")
+def debug_db():
+    """Debug endpoint to check database connection"""
+    try:
+        if teachers_collection is None:
+            return jsonify({"status": "error", "message": "Database collection is None"})
+        
+        # Test a simple query
+        count = teachers_collection.count_documents({})
+        sample_teacher = teachers_collection.find_one({})
+        
+        return jsonify({
+            "status": "success",
+            "collection_name": teachers_collection.name,
+            "total_teachers": count,
+            "sample_teacher": str(sample_teacher) if sample_teacher else "No teachers found"
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+def check_todays_attendance_direct(email):
+    """Check today's attendance directly from database - FIXED VERSION"""
+    try:
+        if teachers_collection is None:
+            return False, None
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        teacher = teachers_collection.find_one({"email": email})
+        
+        if not teacher or 'attendance' not in teacher:
+            return False, None
+
+        today_attendance = next((record for record in teacher['attendance'] if record.get('date') == today), None)
+        return today_attendance is not None, today_attendance
+
+    except Exception as e:
+        print(f"❌ Error checking attendance directly: {e}")
+        import traceback
+        print(f"🔍 Full traceback: {traceback.format_exc()}")
+        return False, None
+
+# ---------- Routes ----------
+@app.route("/start_verification", methods=["POST"])
+def start_verification():
+    global CURRENT_TEACHER_EMAIL, KNOWN_FACE_ENCODING, video_capture, attendance_done, verification_start_time
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON data received"})
+            
+        CURRENT_TEACHER_EMAIL = data.get("email")
+        teacher_image_url = data.get("imageUrl")
+
+        if not CURRENT_TEACHER_EMAIL or not teacher_image_url:
+            return jsonify({"status": "error", "message": "Email and imageUrl are required"})
+
+        print(f"🔍 Starting verification for: {CURRENT_TEACHER_EMAIL}")
+        
+        # Check database connection first
+        if teachers_collection is None:
+            return jsonify({"status": "error", "message": "Database connection not available"})
+        
+        # Check if attendance already marked for today using direct DB check
+        try:
+            attendance_marked, attendance_data = check_todays_attendance_direct(CURRENT_TEACHER_EMAIL)
+            if attendance_marked:
+                return jsonify({
+                    "status": "already_marked", 
+                    "message": "Attendance already marked for today",
+                    "attendance_time": attendance_data.get('time', 'unknown time')
+                })
+        except Exception as e:
+            print(f"⚠️ Error checking attendance: {e}")
+            # Continue with verification even if check fails
+
+        # Load teacher face
+        KNOWN_FACE_ENCODING = load_teacher_face(teacher_image_url)
+        if KNOWN_FACE_ENCODING is None:
+            return jsonify({"status": "error", "message": "Failed to load face from image"})
+
+        # Initialize webcam
+        video_capture = cv2.VideoCapture(0)
+        if not video_capture.isOpened():
+            return jsonify({"status": "error", "message": "Could not access webcam"})
+            
+        # Reset attendance state
+        attendance_done = False
+        verification_start_time = time.time()
+        
+        return jsonify({"status": "ready", "message": "Verification system initialized"})
+        
+    except Exception as e:
+        print(f"❌ Error in start_verification: {str(e)}")
+        import traceback
+        print(f"🔍 Full traceback: {traceback.format_exc()}")
+        return jsonify({"status": "error", "message": str(e)})
+
+def generate_frames():
+    global attendance_done, user_location, CURRENT_TEACHER_EMAIL
+    
+    face_match_counter = 0
+    required_consecutive_matches = 5
+    
+    while video_capture and video_capture.isOpened():
+        success, frame = video_capture.read()
+        if not success:
+            continue
+
+        # Process frame for face recognition
+        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+
+        face_matched = False
+        location_verified = False
+        distance_from_school = None
+        
+        for face_encoding in face_encodings:
+            matches = face_recognition.compare_faces([KNOWN_FACE_ENCODING], face_encoding, tolerance=MAX_FACE_DISTANCE)
+            
+            if len(matches) > 0 and matches[0]:
+                face_matched = True
+                if user_location:
+                    distance_from_school = geodesic(SCHOOL_LOCATION, user_location).meters
+                    location_verified = distance_from_school <= MIN_DISTANCE_METERS
+                    print(f"✅ Face matched! Distance: {distance_from_school:.2f}m")
+                else:
+                    print("✅ Face matched but location not set")
+                break
+
+        # Increment counter if face is matched and location verified
+        if face_matched and location_verified:
+            face_match_counter += 1
+            print(f"🎯 Consecutive matches: {face_match_counter}/{required_consecutive_matches}")
+        else:
+            face_match_counter = 0
+
+        # Record attendance only after consecutive matches
+        if (face_match_counter >= required_consecutive_matches and 
+            not attendance_done and 
+            CURRENT_TEACHER_EMAIL and
+            location_verified):
+            
+            print("🎉 Conditions met, saving attendance to database...")
+            attendance_recorded, action = send_attendance_to_backend(
+                CURRENT_TEACHER_EMAIL, 
+                face_matched, 
+                location_verified
+            )
+            
+            if attendance_recorded:
+                attendance_done = True
+                face_match_counter = 0
+                print(f"✅ Attendance {action} successfully in database!")
+            else:
+                print("❌ Failed to record attendance in database")
+
+        # Draw rectangles and info on frame
+        for (top, right, bottom, left) in face_locations:
+            top *= 4; right *= 4; bottom *= 4; left *= 4
+            
+            color = (0, 255, 0) if face_matched else (0, 0, 255)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+            
+            label = "Verified Teacher" if face_matched else "Unknown Face"
+            cv2.putText(frame, label, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        # Add status text
+        status_text = f"Face: {'✅ Matched' if face_matched else '❌ Searching'}"
+        if user_location:
+            status_text += f" | Location: {'✅ Verified' if location_verified else '❌ Too Far'}"
+            if distance_from_school:
+                status_text += f" ({distance_from_school:.1f}m)"
+        else:
+            status_text += " | Location: ⚠️ Not Set"
+            
+        if face_matched and location_verified:
+            status_text += f" | Matches: {face_match_counter}/{required_consecutive_matches}"
+            
+        cv2.putText(frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        
+        if attendance_done:
+            cv2.putText(frame, "✅ ATTENDANCE RECORDED", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        # Encode frame
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret:
+            continue
+            
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+@app.route("/video_feed")
+def video_feed():
+    if video_capture is None:
+        return "Video capture not initialized", 400
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route("/set_location", methods=["POST"])
+def set_location():
+    global user_location
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No data received"})
+            
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        
+        if latitude is None or longitude is None:
+            return jsonify({"status": "error", "message": "Latitude and longitude are required"})
+            
+        user_location = (float(latitude), float(longitude))
+        distance = geodesic(SCHOOL_LOCATION, user_location).meters
+        print(f"📍 Location set: {user_location}, Distance: {distance:.2f}m")
+        
+        return jsonify({
+            "status": "success", 
+            "message": f"Location set to {user_location}",
+            "distance_from_school": f"{distance:.2f}m",
+            "within_range": distance <= MIN_DISTANCE_METERS
+        })
+        
+    except Exception as e:
+        print(f"❌ Error setting location: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/status")
+def status():
+    distance = None
+    if user_location:
+        distance = geodesic(SCHOOL_LOCATION, user_location).meters
+        
+    return jsonify({
+        "teacher_email": CURRENT_TEACHER_EMAIL,
+        "face_loaded": KNOWN_FACE_ENCODING is not None,
+        "location_set": user_location is not None,
+        "distance_from_school": distance,
+        "within_school_range": distance <= MIN_DISTANCE_METERS if distance else False,
+        "attendance_done": attendance_done
+    })
+
+@app.route("/check_attendance_status")
+def check_attendance_status():
+    if not CURRENT_TEACHER_EMAIL:
+        return jsonify({"status": "error", "message": "No teacher email set"})
+    
+    attendance_marked, attendance_data = check_todays_attendance_direct(CURRENT_TEACHER_EMAIL)
+    return jsonify({
+        "attendance_marked": attendance_marked,
+        "attendance_data": attendance_data
+    })
+
+@app.route("/stop_verification", methods=["POST"])
+def stop_verification():
+    global video_capture, attendance_done, CURRENT_TEACHER_EMAIL, KNOWN_FACE_ENCODING, user_location
+    if video_capture:
+        video_capture.release()
+    video_capture = None
+    attendance_done = False
+    CURRENT_TEACHER_EMAIL = None
+    KNOWN_FACE_ENCODING = None
+    user_location = None
+    return jsonify({"status": "stopped", "message": "Verification system stopped"})
+
+@app.route("/")
+def home():
+    return jsonify({
+        "message": "Face Recognition Attendance System",
+        "status": "running",
+        "endpoints": {
+            "/start_verification": "POST - Start face verification",
+            "/video_feed": "GET - Live video feed",
+            "/set_location": "POST - Set user location",
+            "/status": "GET - System status",
+            "/check_attendance_status": "GET - Check today's attendance",
+            "/stop_verification": "POST - Stop verification"
+        }
+    })
+
+if __name__ == "__main__":
+    print("🚀 Starting Face Recognition Attendance System on port 5001...")
+    print("📍 School Location:", SCHOOL_LOCATION)
+    print("📏 Minimum Distance:", MIN_DISTANCE_METERS, "meters")
+    print("💾 Database: Using direct MongoDB connection for attendance storage")
+    
+    # Test backend connection
+    try:
+        test_response = requests.get("http://localhost:3000/", timeout=5)
+        print(f"✅ Backend server is running: {test_response.status_code}")
+    except:
+        print("⚠️ Backend server is not accessible on port 3000")
+        print("💡 Using direct database storage instead")
+    
+    app.run(port=5001, debug=True)

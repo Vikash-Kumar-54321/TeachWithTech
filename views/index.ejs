@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Lecture Recording System' %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <%- include('partials/header') %>
+    
+    <div class="container">
+        <div class="hero">
+            <h1>Lecture Recording & Analysis System</h1>
+            <p>Advanced platform for lecture recording, AI-powered transcription, and educational content analysis</p>
+            
+            <% if (!locals.teacher) { %>
+                <div class="auth-buttons">
+                    <a href="/auth/login" class="btn btn-primary">Teacher Login</a>
+                    <a href="/auth/register" class="btn btn-secondary">Teacher Registration</a>
+                </div>
+            <% } else { %>
+                <div class="dashboard-link">
+                    <a href="<%= locals.teacher.role === 'admin' ? '/admin/dashboard' : '/teacher/dashboard' %>" 
+                       class="btn btn-primary">
+                        Go to Dashboard
+                    </a>
+                </div>
+            <% } %>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <h3>🕒 Automatic Scheduling</h3>
+                <p>Lectures automatically enable at scheduled times with real-time notifications</p>
+            </div>
+            <div class="feature-card">
+                <h3>🎙️ AI-Powered Transcription</h3>
+                <p>Advanced speech-to-text transcription with human voice detection</p>
+            </div>
+            <div class="feature-card">
+                <h3>🤖 Intelligent Analysis</h3>
+                <p>AI-powered content matching and educational effectiveness analysis</p>
+            </div>
+            <div class="feature-card">
+                <h3>📊 Detailed Analytics</h3>
+                <p>Comprehensive reports on teaching performance and content coverage</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔒 Secure Storage</h3>
+                <p>All recordings and transcripts securely stored in MongoDB database</p>
+            </div>
+            <div class="feature-card">
+                <h3>📱 Responsive Design</h3>
+                <p>Works perfectly on desktop, tablet, and mobile devices</p>
+            </div>
+        </div>
+
+        <% if (!locals.teacher) { %>
+        <div class="form-container">
+            <h2>System Overview</h2>
+            <p>This system helps teachers practice and deliver lectures effectively by:</p>
+            <ul>
+                <li>Automatically scheduling recording sessions</li>
+                <li>Transcribing lectures in real-time</li>
+                <li>Comparing with reference materials using AI</li>
+                <li>Providing detailed analysis and feedback</li>
+                <li>Tracking progress over time</li>
+            </ul>
+        </div>
+        <% } %>
+    </div>
+
+    <%- include('partials/footer') %>
+    
+    <script src="/js/schedule.js"></script>
+</body>
+</html>
