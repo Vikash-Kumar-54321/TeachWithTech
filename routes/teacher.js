@@ -1,445 +1,213 @@
-const express = require('express');
-const { requireAuth, attachTeacherInfo } = require('../middleware/auth');
-const Lecture = require('../models/Lecture');
+const express = require("express");
+const axios = require("axios");
 const router = express.Router();
-const Teacher = require('../models/Teacher'); 
 
+const { requireAuth, attachTeacherInfo } = require("../middleware/auth");
+const Lecture = require("../models/Lecture");
+const Teacher = require("../models/Teacher");
+
+// =====================
+// CONFIG
+// =====================
+const PYTHON_API = process.env.PYTHON_API_URL;
+
+// =====================
+// MIDDLEWARE
+// =====================
 router.use(requireAuth);
 router.use(attachTeacherInfo);
 
-// Teacher dashboard
-router.get('/dashboard', async (req, res) => {
+// =====================
+// DASHBOARD
+// =====================
+router.get("/dashboard", async (req, res) => {
     try {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
         const lectures = await Lecture.find({
             teacher: req.session.teacherId,
-            date: {
-                $gte: today,
-                $lt: tomorrow
-            }
-        }).sort({ 'schedule.startTime': 1 });
+            date: { $gte: today, $lt: tomorrow }
+        }).sort({ "schedule.startTime": 1 });
 
-        const currentTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
-        
-        // Find current or next lecture
+        const currentTime = new Date().toTimeString().slice(0, 5);
+
         let currentLecture = null;
         for (const lecture of lectures) {
-            const canRecord = currentTime >= lecture.schedule.startTime && 
-                            currentTime <= lecture.schedule.endTime;
-            if (lecture.status === 'recording' || canRecord) {
+            const canRecord =
+                currentTime >= lecture.schedule.startTime &&
+                currentTime <= lecture.schedule.endTime;
+
+            if (lecture.status === "recording" || canRecord) {
                 currentLecture = lecture;
                 break;
             }
         }
 
-        res.render('teacher/dashboard', { 
-            lectures, 
+        res.render("teacher/dashboard", {
+            lectures,
             currentLecture,
             currentTime,
-            title: 'Teacher Dashboard',
-            message: req.query.message
+            title: "Teacher Dashboard"
         });
-    } catch (error) {
-        console.error('Dashboard error:', error);
-        res.render('error', { error: 'Error loading dashboard' });
+
+    } catch (err) {
+        console.error(err);
+        res.render("error", { error: "Dashboard error" });
     }
 });
 
-// Recording page
-router.get('/recording/:lectureId', async (req, res) => {
-    try {
-        const lecture = await Lecture.findOne({
-            _id: req.params.lectureId,
-            teacher: req.session.teacherId
-        }).populate('teacher');
-
-        if (!lecture) {
-            return res.status(404).render('error', { error: 'Lecture not found' });
-        }
-
-        const currentTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
-        const canRecord = currentTime >= lecture.schedule.startTime && 
-                        currentTime <= lecture.schedule.endTime;
-
-        if (!canRecord && lecture.status !== 'recording') {
-            return res.render('error', { 
-                error: 'Recording is not available at this time. Scheduled time: ' + 
-                       lecture.schedule.startTime + ' - ' + lecture.schedule.endTime
-            });
-        }
-
-        res.render('teacher/recording', { 
-            lecture, 
-            title: `Record - ${lecture.title}` 
-        });
-    } catch (error) {
-        console.error('Recording page error:', error);
-        res.render('error', { error: 'Error loading recording page' });
-    }
-});
-
-// Lecture history
-router.get('/lectures', async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = 10;
-        const skip = (page - 1) * limit;
-
-        const lectures = await Lecture.find({ teacher: req.session.teacherId })
-            .sort({ date: -1, 'schedule.startTime': -1 })
-            .skip(skip)
-            .limit(limit);
-
-        const total = await Lecture.countDocuments({ teacher: req.session.teacherId });
-        const totalPages = Math.ceil(total / limit);
-
-        res.render('teacher/lectures', { 
-            lectures, 
-            currentPage: page,
-            totalPages,
-            title: 'My Lectures' 
-        });
-    } catch (error) {
-        console.error('Lectures list error:', error);
-        res.render('error', { error: 'Error loading lectures' });
-    }
-});
-
-// Lecture details
-router.get('/lectures/:lectureId', async (req, res) => {
-    try {
-        const lecture = await Lecture.findOne({
-            _id: req.params.lectureId,
-            teacher: req.session.teacherId
-        }).populate('teacher');
-
-        if (!lecture) {
-            return res.status(404).render('error', { error: 'Lecture not found' });
-        }
-
-        res.render('teacher/lecture-details', { 
-            lecture, 
-            title: `Lecture Details - ${lecture.title}` 
-        });
-    } catch (error) {
-        console.error('Lecture details error:', error);
-        res.render('error', { error: 'Error loading lecture details' });
-    }
-});
-
-
+// =====================
+// MARK ATTENDANCE PAGE
+// =====================
 router.get("/markAttendance", (req, res) => {
-    if (!req.teacher) return res.redirect("/auth/login"); // <-- use req.teacher
-    res.render("teacher/markAttendance", { teacher: req.teacher, title: "Mark Attendance" });
+    if (!req.teacher) return res.redirect("/auth/login");
+    res.render("teacher/markAttendance", {
+        teacher: req.teacher,
+        title: "Mark Attendance"
+    });
 });
 
+// =======================================================
+// 🔥 ATTENDANCE – PRODUCTION SAFE FLOW (NO LOCALHOST)
+// =======================================================
 
-// Save attendance (called by Flask after verification)
-
-
-
-router.post('/mark-attendance', async (req, res) => {
+// ---------- START VERIFICATION ----------
+router.post("/start-verification", async (req, res) => {
     try {
-        // ✅ Check API Key in headers
-        const apiKey = req.headers['x-api-key'];
-        if (!apiKey || apiKey !== "my-secret-key") {
-            return res.status(401).json({
-                success: false,
-                message: "Unauthorized - Invalid API Key"
-            });
-        }
+        const { email, imageUrl } = req.body;
 
-        const { email, date, time, faceMatched, locationMatched, verified } = req.body;
-
-        console.log('📝 Received attendance data:', req.body);
-
-        // Validate required fields
-        if (!email || !date || !time) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email, date, and time are required'
-            });
-        }
-
-        // Find teacher by email
-        const teacher = await Teacher.findOne({ email });
-        if (!teacher) {
-            return res.status(404).json({
-                success: false,
-                message: 'Teacher not found'
-            });
-        }
-
-        console.log(`👨‍🏫 Found teacher: ${teacher.name}`);
-
-        // Check if attendance already marked for today
-        const today = date; // YYYY-MM-DD format
-        const existingAttendanceIndex = teacher.attendance.findIndex(record =>
-            record.date === today
+        const response = await axios.post(
+            `${PYTHON_API}/start_verification`,
+            { email, imageUrl }
         );
 
-        console.log(`📅 Existing attendance index: ${existingAttendanceIndex}`);
+        res.json({ success: true, ...response.data });
 
-        let action = 'created';
-        let attendanceRecord;
-
-        if (existingAttendanceIndex !== -1) {
-            // Update existing attendance record
-            teacher.attendance[existingAttendanceIndex] = {
-                date: date,
-                time: time,
-                faceMatched: faceMatched !== undefined ? faceMatched : false,
-                locationMatched: locationMatched !== undefined ? locationMatched : false,
-                verified: verified !== undefined ? verified : (faceMatched && locationMatched)
-            };
-            action = 'updated';
-            attendanceRecord = teacher.attendance[existingAttendanceIndex];
-        } else {
-            // Add new attendance record
-            attendanceRecord = {
-                date: date,
-                time: time,
-                faceMatched: faceMatched !== undefined ? faceMatched : false,
-                locationMatched: locationMatched !== undefined ? locationMatched : false,
-                verified: verified !== undefined ? verified : (faceMatched && locationMatched)
-            };
-            teacher.attendance.push(attendanceRecord);
-        }
-
-        console.log(`💾 Saving attendance record:`, attendanceRecord);
-
-        // Save teacher doc
-        await teacher.save();
-
-        console.log(`✅ Attendance ${action} for teacher: ${teacher.name}`);
-        console.log(`📊 Total attendance records: ${teacher.attendance.length}`);
-
-        res.json({
-            success: true,
-            message: `Attendance ${action} successfully`,
-            data: {
-                teacher: teacher.name,
-                email: teacher.email,
-                date: date,
-                time: time,
-                faceMatched: attendanceRecord.faceMatched,
-                locationMatched: attendanceRecord.locationMatched,
-                verified: attendanceRecord.verified,
-                action: action
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Error marking attendance:', error);
+    } catch (err) {
+        console.error("Start verification error:", err.message);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
-            error: error.message
+            message: "Failed to start verification"
         });
     }
 });
 
-
-// Check today's attendance status
-// Check today's attendance status
-// router.get('/attendance-status', async (req, res) => {
-//     try {
-//         const { email } = req.query;
-        
-//         if (!email) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: 'Email is required'
-//             });
-//         }
-
-//         console.log(`🔍 Checking attendance status for: ${email}`);
-
-//         const teacher = await Teacher.findOne({ email });
-//         if (!teacher) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: 'Teacher not found'
-//             });
-//         }
-
-//         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-//         console.log(`📅 Today's date: ${today}`);
-        
-//         const todayAttendance = teacher.attendance.find(record => record.date === today);
-
-//         console.log(`📊 Today's attendance found:`, todayAttendance);
-//         console.log(`📋 Total attendance records: ${teacher.attendance.length}`);
-
-//         res.json({
-//             success: true,
-//             data: {
-//                 attendanceMarked: !!todayAttendance,
-//                 attendance: todayAttendance || null
-//             }
-//         });
-
-//     } catch (error) {
-//         console.error('❌ Error checking attendance status:', error);
-//         res.status(500).json({
-//             success: false,
-//             message: 'Internal server error',
-//             error: error.message
-//         });
-//     }
-// });
-
-// Fix the attendance-status route in your Express app
-// Fix the attendance-status route in your Express app
-router.get('/attendance-status', async (req, res) => {
+// ---------- VERIFICATION STATUS ----------
+router.get("/verification-status", async (req, res) => {
     try {
-        const { email } = req.query;
-        
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email is required'
-            });
+        const response = await axios.get(`${PYTHON_API}/status`);
+        res.json(response.data);
+    } catch (err) {
+        console.error("Status error:", err.message);
+        res.json({ attendance_done: false });
+    }
+});
+
+// ---------- VIDEO FEED (STREAM PROXY) ----------
+router.get("/video-feed", async (req, res) => {
+    try {
+        const response = await axios.get(
+            `${PYTHON_API}/video_feed`,
+            { responseType: "stream" }
+        );
+
+        res.setHeader(
+            "Content-Type",
+            "multipart/x-mixed-replace; boundary=frame"
+        );
+
+        response.data.pipe(res);
+
+    } catch (err) {
+        console.error("Video feed error:", err.message);
+        res.end();
+    }
+});
+
+// ---------- STOP VERIFICATION ----------
+router.post("/stop-verification", async (req, res) => {
+    try {
+        await axios.post(`${PYTHON_API}/stop_verification`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Stop error:", err.message);
+        res.json({ success: false });
+    }
+});
+
+// =======================================================
+// SAVE ATTENDANCE (CALLED BY PYTHON)
+// =======================================================
+router.post("/mark-attendance", async (req, res) => {
+    try {
+        const apiKey = req.headers["x-api-key"];
+        if (apiKey !== "my-secret-key") {
+            return res.status(401).json({ success: false });
         }
 
-        console.log(`🔍 Checking attendance status for: ${email}`);
+        const { email, date, time, faceMatched, locationMatched } = req.body;
 
         const teacher = await Teacher.findOne({ email });
         if (!teacher) {
-            return res.status(404).json({
-                success: false,
-                message: 'Teacher not found'
-            });
+            return res.status(404).json({ success: false });
         }
 
-        // Get both UTC and local dates to handle timezone differences
-        const now = new Date();
-        const todayUTC = now.toISOString().split('T')[0]; // UTC date (what Flask uses)
-        const todayLocal = now.toLocaleDateString('en-CA'); // Local date YYYY-MM-DD
-        
-        console.log(`📅 Today's date - UTC: ${todayUTC}, Local: ${todayLocal}`);
-        console.log(`📋 Total attendance records: ${teacher.attendance.length}`);
-        
-        // Debug: log all attendance records
-        console.log('📊 All attendance records:', teacher.attendance);
+        const index = teacher.attendance.findIndex(a => a.date === date);
 
-        // Check for attendance with both UTC and local dates
-        let todayAttendance = teacher.attendance.find(record => record.date === todayUTC);
-        
-        // If not found with UTC date, try local date
-        if (!todayAttendance) {
-            todayAttendance = teacher.attendance.find(record => record.date === todayLocal);
-            if (todayAttendance) {
-                console.log('🔄 Found attendance using local date instead of UTC');
-            }
+        const record = {
+            date,
+            time,
+            faceMatched: !!faceMatched,
+            locationMatched: !!locationMatched,
+            verified: faceMatched && locationMatched
+        };
+
+        if (index >= 0) {
+            teacher.attendance[index] = record;
+        } else {
+            teacher.attendance.push(record);
         }
 
-        console.log(`🎯 Today's attendance found:`, todayAttendance);
+        await teacher.save();
 
-        res.json({
-            success: true,
-            data: {
-                attendanceMarked: !!todayAttendance,
-                attendance: todayAttendance || null
-            }
-        });
+        res.json({ success: true });
 
-    } catch (error) {
-        console.error('❌ Error checking attendance status:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
+    } catch (err) {
+        console.error("Attendance save error:", err);
+        res.status(500).json({ success: false });
     }
 });
 
-// Get all attendance records for a teacher
-// Get all attendance records for a teacher
-router.get('/attendance-history', async (req, res) => {
+// =====================
+// ATTENDANCE STATUS
+// =====================
+router.get("/attendance-status", async (req, res) => {
     try {
         const { email } = req.query;
-        
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email is required'
-            });
-        }
+        const teacher = await Teacher.findOne({ email });
 
-        const teacher = await Teacher.findOne({ email }).select('name email attendance');
         if (!teacher) {
-            return res.status(404).json({
-                success: false,
-                message: 'Teacher not found'
-            });
+            return res.json({ success: false });
         }
 
-        // Sort attendance by date (newest first)
-        const sortedAttendance = teacher.attendance.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const today = new Date().toISOString().split("T")[0];
+        const attendance = teacher.attendance.find(a => a.date === today);
 
         res.json({
             success: true,
             data: {
-                teacher: teacher.name,
-                email: teacher.email,
-                attendance: sortedAttendance
+                attendanceMarked: !!attendance,
+                attendance: attendance || null
             }
         });
 
-    } catch (error) {
-        console.error('Error fetching attendance history:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
-    }
-});
-
-// Debug route to check database storage
-router.get('/debug/:lectureId', async (req, res) => {
-    try {
-        const lecture = await Lecture.findOne({
-            _id: req.params.lectureId,
-            teacher: req.session.teacherId
-        });
-        
-        if (!lecture) {
-            return res.json({ error: 'Lecture not found' });
-        }
-
-        res.json({
-            lecture: {
-                title: lecture.title,
-                youtubeTranscript: {
-                    exists: !!lecture.youtubeVideo?.transcript,
-                    length: lecture.youtubeVideo?.transcript?.length || 0,
-                    generated: lecture.youtubeVideo?.transcriptGenerated || false,
-                    generatedAt: lecture.youtubeVideo?.transcriptGeneratedAt
-                },
-                recordingTranscript: {
-                    exists: !!lecture.recording?.transcript,
-                    length: lecture.recording?.transcript?.length || 0,
-                    wordCount: lecture.recording?.wordCount || 0,
-                    generatedAt: lecture.recording?.transcriptGeneratedAt
-                },
-                analysis: {
-                    matchPercentage: lecture.analysis?.transcriptMatchPercentage,
-                    humanVoiceProbability: lecture.analysis?.humanVoiceProbability,
-                    status: lecture.analysis?.status,
-                    analyzedAt: lecture.analysis?.analyzedAt
-                }
-            }
-        });
-
-    } catch (error) {
-        res.json({ error: error.message });
+    } catch (err) {
+        console.error(err);
+        res.json({ success: false });
     }
 });
 
