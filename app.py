@@ -468,10 +468,6 @@
 
 # gemini code (may be correct for gps devices)
 from flask import Flask, request, jsonify, Response
-try:
-    import face_recognition
-except:
-    face_recognition = None
 import cv2
 import numpy as np
 from geopy.distance import geodesic
@@ -481,7 +477,13 @@ import time
 import os
 from datetime import datetime
 import json
+try:
+    import face_recognition
+except ImportError:
+    face_recognition = None
+
 from pymongo import MongoClient
+
 
 app = Flask(__name__)
 CORS(app)
