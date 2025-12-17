@@ -4,215 +4,516 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title %> - Lecture System</title>
+    
+    <!-- Google Fonts: Inter for a clean, professional look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link rel="stylesheet" href="/css/style.css">
+    
     <style>
+        :root {
+            --primary: #4f46e5; /* Indigo 600 */
+            --primary-hover: #4338ca;
+            --secondary: #64748b; /* Slate 500 */
+            --success: #10b981; /* Emerald 500 */
+            --danger: #ef4444; /* Red 500 */
+            --warning: #f59e0b; /* Amber 500 */
+            --info: #3b82f6; /* Blue 500 */
+            --background: #f3f4f6; /* Gray 100 */
+            --surface: #ffffff;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            line-height: 1.6;
+            margin: 0;
+            padding-bottom: 40px;
+        }
+
+        .main-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* --- Headers --- */
+        .dashboard-header {
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .dashboard-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        .welcome-text {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        /* --- Alerts --- */
+        .alert {
+            padding: 16px;
+            border-radius: var(--radius);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid transparent;
+        }
+
+        .alert-success { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+        .alert-info { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+        .alert-warning { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+
+        /* --- Active Lecture Hero Section --- */
+        .active-lecture-card {
+            background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+            color: white;
+            border-radius: var(--radius);
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .active-lecture-card::before {
+            content: '';
+            position: absolute;
+            top: 0; right: 0; bottom: 0; left: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.2;
+        }
+
+        .active-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .active-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            backdrop-filter: blur(4px);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        .active-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .active-details {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 25px;
+        }
+
+        /* --- Section Titles --- */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* --- Grid & Cards --- */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
         }
-        
+
         .lecture-card {
-            background: white;
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .lecture-card-active {
+            border: 2px solid var(--primary);
+        }
+
+        .lecture-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .card-header {
             padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            border-left: 4px solid #007bff;
+            border-bottom: 1px solid #f3f4f6;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
-        
-        .lecture-card h3 {
-            margin: 0 0 10px 0;
-            color: #333;
+
+        .card-body {
+            padding: 20px;
+            flex-grow: 1;
         }
-        
-        .lecture-card .meta {
-            color: #666;
-            font-size: 0.9rem;
-            margin-bottom: 15px;
+
+        .card-footer {
+            padding: 16px 20px;
+            background: #f9fafb;
+            border-top: 1px solid #f3f4f6;
         }
-        
-        .status {
+
+        .subject-badge {
             display: inline-block;
+            padding: 4px 10px;
+            background: #e0e7ff;
+            color: var(--primary);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .lecture-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 10px 0 5px 0;
+            color: var(--text-main);
+        }
+
+        .lecture-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        /* --- Status Indicators --- */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             padding: 4px 12px;
             border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
+            font-size: 0.75rem;
+            font-weight: 600;
             text-transform: uppercase;
         }
-        
-        .status-scheduled { background: #e3f2fd; color: #1976d2; }
-        .status-recording { background: #ffebee; color: #d32f2f; }
-        .status-completed { background: #e8f5e8; color: #2e7d32; }
-        .status-analyzed { background: #f3e5f5; color: #7b1fa2; }
-        .status-cancelled { background: #f5f5f5; color: #616161; }
-        
-        .current-lecture {
-            border-left: 4px solid #d32f2f;
-            background: #fff3f3;
-        }
-        
+
+        .status-scheduled { background: #e0f2fe; color: #0284c7; }
+        .status-recording { background: #fee2e2; color: #dc2626; }
+        .status-completed { background: #dcfce7; color: #16a34a; }
+        .status-analyzed { background: #f3e8ff; color: #7e22ce; }
+        .status-cancelled { background: #f3f4f6; color: #6b7280; }
+
+        /* --- Buttons --- */
         .btn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             padding: 10px 20px;
-            background: #007bff;
-            color: white;
+            border-radius: 8px;
+            font-weight: 500;
             text-decoration: none;
-            border-radius: 5px;
-            border: none;
             cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.3s;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.95rem;
+            width: 100%;
         }
-        
-        .btn:hover {
-            background: #0056b3;
+
+        .btn-sm { padding: 8px 16px; font-size: 0.85rem; width: auto; }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
         }
-        
-        .btn-success { background: #28a745; }
-        .btn-success:hover { background: #218838; }
-        
-        .btn-primary { background: #007bff; }
-        .btn-primary:hover { background: #0056b3; }
-        
-        .btn-secondary { background: #6c757d; }
-        .btn-secondary:hover { background: #545b62; }
-        
-        .btn-danger { background: #dc3545; }
-        .btn-danger:hover { background: #c82333; }
-        
-        .btn:disabled {
-            background: #6c757d;
+        .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+
+        .btn-success {
+            background-color: var(--success);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+        }
+        .btn-success:hover { background-color: #059669; }
+
+        .btn-white-glass {
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .btn-white-glass:hover { background: #ffffff; }
+
+        .btn-secondary {
+            background-color: white;
+            color: var(--text-main);
+            border: 1px solid #e5e7eb;
+        }
+        .btn-secondary:hover { background-color: #f9fafb; border-color: #d1d5db; }
+
+        .btn-disabled {
+            background-color: #f3f4f6;
+            color: #9ca3af;
             cursor: not-allowed;
+            box-shadow: none;
         }
-        
-        .alert {
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
+
+        /* --- Empty States --- */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            color: var(--text-muted);
+            border: 2px dashed #e5e7eb;
         }
-        
-        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-        .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        
-        .form-container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+
+        /* --- Quick Actions --- */
+        .quick-actions-card {
+            background: var(--surface);
+            padding: 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-header { margin-top: 10px; }
+            .active-lecture-card { padding: 20px; }
+            .active-title { font-size: 1.5rem; }
+            .action-group { width: 100%; flex-direction: column; }
+            .btn { width: 100%; }
         }
     </style>
 </head>
 <body>
     <%- include('../partials/header') %>
     
-    <div class="container">
-        <h1>Teacher Dashboard</h1>
-        <p>Welcome back, <%= teacher.name %>! Here's your schedule for today.</p>
+    <div class="main-wrapper">
+        
+        <!-- Welcome Header -->
+        <header class="dashboard-header">
+            <h1 class="fade-in"><i class="fa-solid fa-chalkboard-user" style="color: var(--primary); margin-right: 10px;"></i>Teacher Dashboard</h1>
+            <span class="welcome-text">Welcome back, <strong><%= teacher.name %></strong>! Here is your agenda for today.</span>
+        </header>
 
+        <!-- Flash Messages -->
         <% if (typeof message !== 'undefined') { %>
             <div class="alert alert-success">
-                <%= message %>
+                <i class="fa-solid fa-circle-check"></i>
+                <span><%= message %></span>
             </div>
         <% } %>
 
-        <!-- Current Lecture Indicator -->
+        <!-- Current Lecture Hero Section -->
         <% if (currentLecture) { %>
-            <div class="alert alert-info">
-                <h3>🔴 Currently Active Lecture</h3>
-                <p><strong><%= currentLecture.title %></strong> - 
-                   <%= currentLecture.subject %> (<%= currentLecture.class %>)</p>
-                <p>Time: <%= currentLecture.schedule.startTime %> - <%= currentLecture.schedule.endTime %></p>
-                <% 
-                    const now = new Date();
-                    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
-                    const canRecord = currentTime >= currentLecture.schedule.startTime && 
-                                    currentTime <= currentLecture.schedule.endTime;
-                %>
-                <% if (canRecord || currentLecture.status === 'recording') { %>
-                    <a href="/teacher/recording/<%= currentLecture._id %>" class="btn btn-success">
-                        <% if (currentLecture.status === 'recording') { %>
-                            Continue Recording
-                        <% } else { %>
-                            Start Recording
-                        <% } %>
-                    </a>
-                <% } else { %>
-                    <button class="btn btn-secondary" disabled>
-                        Available at <%= currentLecture.schedule.startTime %>
-                    </button>
-                <% } %>
-            </div>
-        <% } else { %>
-            <div class="alert alert-warning">
-                No active lectures at the moment. Next lecture will automatically activate at scheduled time.
-            </div>
-        <% } %>
+            <div class="active-lecture-card">
+                <div class="active-content">
+                    <div class="active-badge">
+                        <span class="pulse-dot"></span>
+                        LIVE SESSION
+                    </div>
+                    <h2 class="active-title"><%= currentLecture.title %></h2>
+                    <div class="active-details">
+                        <i class="fa-solid fa-book-open" style="margin-right: 8px;"></i> <%= currentLecture.subject %> 
+                        <span style="opacity: 0.6; margin: 0 10px;">|</span> 
+                        <i class="fa-solid fa-users" style="margin-right: 8px;"></i> Class <%= currentLecture.class %>
+                        <br>
+                        <i class="fa-regular fa-clock" style="margin-right: 8px; margin-top: 8px;"></i> <%= currentLecture.schedule.startTime %> - <%= currentLecture.schedule.endTime %>
+                    </div>
 
-        <!-- Today's Schedule -->
-        <div class="form-container">
-            <h2>Today's Schedule (<%= new Date().toLocaleDateString() %>)</h2>
-            
-            <% if (lectures.length > 0) { %>
-                <div class="dashboard-grid">
-                    <% lectures.forEach(lecture => { 
+                    <% 
                         const now = new Date();
                         const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
-                        const canRecord = currentTime >= lecture.schedule.startTime && 
-                                        currentTime <= lecture.schedule.endTime;
-                        const isActive = lecture.status === 'recording' || canRecord;
+                        const canRecord = currentTime >= currentLecture.schedule.startTime && 
+                                          currentTime <= currentLecture.schedule.endTime;
                     %>
-                        <div class="lecture-card <%= isActive ? 'current-lecture' : '' %>">
-                            <h3><%= lecture.title %></h3>
-                            <div class="meta">
-                                <strong>Subject:</strong> <%= lecture.subject %> | 
-                                <strong>Class:</strong> <%= lecture.class %><br>
-                                <strong>Time:</strong> <%= lecture.schedule.startTime %> - <%= lecture.schedule.endTime %>
-                            </div>
-                            <div class="status status-<%= lecture.status %>">
-                                <%= lecture.status.toUpperCase() %>
-                            </div>
-                            
-                            <div style="margin-top: 15px;">
-                                <% if (isActive) { %>
-                                    <a href="/teacher/recording/<%= lecture._id %>" class="btn btn-success">
-                                        <% if (lecture.status === 'recording') { %>
-                                            Continue Recording
-                                        <% } else { %>
-                                            Start Recording
-                                        <% } %>
-                                    </a>
-                                <% } else if (lecture.status === 'analyzed') { %>
-                                    <a href="/teacher/lectures/<%= lecture._id %>" class="btn btn-primary">
-                                        View Results
-                                    </a>
-                                <% } else if (lecture.status === 'completed') { %>
-                                    <button class="btn btn-secondary" disabled>
-                                        Processing...
-                                    </button>
+                    
+                    <div style="max-width: 250px;">
+                        <% if (canRecord || currentLecture.status === 'recording') { %>
+                            <a href="/teacher/recording/<%= currentLecture._id %>" class="btn btn-white-glass">
+                                <% if (currentLecture.status === 'recording') { %>
+                                    <i class="fa-solid fa-video"></i> Continue Recording
                                 <% } else { %>
-                                    <button class="btn btn-secondary" disabled>
-                                        Starts at <%= lecture.schedule.startTime %>
-                                    </button>
+                                    <i class="fa-solid fa-circle-play"></i> Start Recording
                                 <% } %>
-                            </div>
-                        </div>
-                    <% }); %>
+                            </a>
+                        <% } else { %>
+                            <button class="btn btn-white-glass" style="opacity: 0.7; cursor: default;">
+                                <i class="fa-solid fa-hourglass-half"></i> Starts at <%= currentLecture.schedule.startTime %>
+                            </button>
+                        <% } %>
+                    </div>
                 </div>
-            <% } else { %>
-                <p>No lectures scheduled for today.</p>
-            <% } %>
+            </div>
+        <% } else { %>
+            <div class="alert alert-info">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>No active lectures right now. Your next session will appear here automatically.</span>
+            </div>
+        <% } %>
+
+        <!-- Schedule Section -->
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-regular fa-calendar-check" style="color: var(--secondary);"></i>
+                Today's Schedule (<%= new Date().toLocaleDateString() %>)
+            </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="form-container">
-            <h2>Quick Actions</h2>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <a href="/teacher/lectures" class="btn btn-primary">View All Lectures</a>
-                <a href="/auth/logout" class="btn btn-secondary">Logout</a>
+        <% if (lectures.length > 0) { %>
+            <div class="dashboard-grid">
+                <% lectures.forEach(lecture => { 
+                    const now = new Date();
+                    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+                    const canRecord = currentTime >= lecture.schedule.startTime && 
+                                      currentTime <= lecture.schedule.endTime;
+                    const isActive = lecture.status === 'recording' || canRecord;
+                %>
+                    <div class="lecture-card <%= isActive ? 'lecture-card-active' : '' %>">
+                        <div class="card-header">
+                            <span class="subject-badge"><%= lecture.subject %></span>
+                            
+                            <% 
+                                let statusIcon = 'fa-clock';
+                                if(lecture.status === 'recording') statusIcon = 'fa-video';
+                                if(lecture.status === 'completed') statusIcon = 'fa-check';
+                                if(lecture.status === 'analyzed') statusIcon = 'fa-chart-pie';
+                            %>
+                            
+                            <div class="status-badge status-<%= lecture.status %>">
+                                <i class="fa-solid <%= statusIcon %>"></i>
+                                <%= lecture.status %>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <h3 class="lecture-title"><%= lecture.title %></h3>
+                            <div class="lecture-info">
+                                <i class="fa-solid fa-layer-group" style="width: 20px;"></i>
+                                Class <%= lecture.class %>
+                            </div>
+                            <div class="lecture-info">
+                                <i class="fa-regular fa-clock" style="width: 20px;"></i>
+                                <%= lecture.schedule.startTime %> - <%= lecture.schedule.endTime %>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <% if (isActive) { %>
+                                <a href="/teacher/recording/<%= lecture._id %>" class="btn btn-success">
+                                    <% if (lecture.status === 'recording') { %>
+                                        <i class="fa-solid fa-video"></i> Resume
+                                    <% } else { %>
+                                        <i class="fa-solid fa-play"></i> Start
+                                    <% } %>
+                                </a>
+                            <% } else if (lecture.status === 'analyzed') { %>
+                                <a href="/teacher/lectures/<%= lecture._id %>" class="btn btn-primary">
+                                    <i class="fa-solid fa-chart-line"></i> View Report
+                                </a>
+                            <% } else if (lecture.status === 'completed') { %>
+                                <button class="btn btn-disabled" disabled>
+                                    <i class="fa-solid fa-gears"></i> Processing...
+                                </button>
+                            <% } else { %>
+                                <button class="btn btn-secondary btn-disabled" disabled>
+                                    Upcoming
+                                </button>
+                            <% } %>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+        <% } else { %>
+            <div class="empty-state">
+                <i class="fa-solid fa-mug-hot fa-3x" style="color: #d1d5db; margin-bottom: 15px;"></i>
+                <p>No lectures scheduled for today. Enjoy your day off!</p>
+            </div>
+        <% } %>
+
+        <!-- Quick Actions Footer -->
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-solid fa-bolt" style="color: var(--warning);"></i> Quick Actions
+            </div>
+        </div>
+        
+        <div class="quick-actions-card">
+            <span style="color: var(--text-muted);">Manage your account and view history.</span>
+            <div class="action-group">
+                <a href="/teacher/lectures" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-list"></i> View All Lectures
+                </a>
+                <a href="/auth/logout" class="btn btn-secondary btn-sm" style="color: var(--danger); border-color: #fecaca;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </a>
             </div>
         </div>
     </div>
@@ -220,19 +521,16 @@
     <%- include('../partials/footer') %>
     
     <script>
-        // Auto-refresh the page every 30 seconds to update lecture status
-        setTimeout(() => {
-            window.location.reload();
-        }, 30000);
+        // Auto-refresh logic preserved
+        setTimeout(() => { window.location.reload(); }, 30000);
         
-        // Check for current lecture updates
         setInterval(async () => {
             try {
                 const response = await fetch('/api/current-lecture');
                 const data = await response.json();
                 
-                if (data.lecture && !document.querySelector('.current-lecture')) {
-                    // If a new lecture becomes active, refresh the page
+                // If the DOM doesn't have an active card but the API says there is one
+                if (data.lecture && !document.querySelector('.active-lecture-card')) {
                     window.location.reload();
                 }
             } catch (error) {
