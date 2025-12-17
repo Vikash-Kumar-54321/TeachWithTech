@@ -468,7 +468,10 @@
 
 # gemini code (may be correct for gps devices)
 from flask import Flask, request, jsonify, Response
-import face_recognition
+try:
+    import face_recognition
+except:
+    face_recognition = None
 import cv2
 import numpy as np
 from geopy.distance import geodesic
